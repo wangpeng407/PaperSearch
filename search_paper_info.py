@@ -34,7 +34,7 @@ def parse_args():
 
 def read_list(infile):
     with open(infile, 'r') as f:
-        cont = [i.rstrip() for i in f if not i.startswith('#')]
+        cont = [i.rstrip() for i in f if not i.startswith('#') and i.rstrip() != '']
     return cont
 
 def translate(cont):
@@ -108,13 +108,16 @@ def get_pmids(terms, maxi, date_sort):
             r = requests.Session().get(full_url)
             r2 = BeautifulSoup(r.content, "html.parser", from_encoding="utf-8")
             temp_pmid = r2.find('meta', attrs={"name": "uid"})
+            temp2_pmid = r2.find_all('a', class_='docsum-title') # keywords for many papers
+            if temp_pmid is None and len(temp2_pmid) == 0:
+                sys.stderr.write('WARNING: no results for {}.\n'.format(colored(term, 'red')))
             if temp_pmid is not None:
                 pmids.append(temp_pmid['content'])
             else:
-                for i in r2.find_all('a', class_='docsum-title'):
+                for i in temp2_pmid:
                     pmids.append(i['data-article-id'])
         except Exception as e:
-            sys.stderr.write('Error occurs when searching {} \n{} | {}\n\n'.format(term, full_url, e))
+            sys.stderr.write('Error occurs when searching {} \n{} | {}\n\n'.format(colored(term, 'cyan'), full_url, e))
     return pmids
 
 def cfprint(text, type = None):
@@ -177,6 +180,7 @@ def main():
         sys.exit('\nError: -m/--maxiterm must be choose from [10,20,50,100,200]\n')
     ids_pool = get_pmids(terms = iterms, maxi=args.maxiterm, date_sort=args.date_sort)
     res = all_paper_infomation(ids_pool)
+    cfprint("\n".join(iterms), end="\n\n")
     outtype = 1 if args.outType else None
     print_info(res, format_type=outtype)
 
