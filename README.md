@@ -28,7 +28,7 @@ python search_paper_info.py -l plist -m 10 -t 0 -d 1 > out.list
 
 ### out files
 
-(out.html)[https://github.com/wangpeng407/PaperSearch/edit/master/out.html]
+(out.html)[https://github.com/wangpeng407/PaperSearch/out.html]
 
 out.list
 
