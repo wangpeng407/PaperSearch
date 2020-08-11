@@ -180,7 +180,7 @@ def main():
         sys.exit('\nError: -m/--maxiterm must be choose from [10,20,50,100,200]\n')
     ids_pool = get_pmids(terms = iterms, maxi=args.maxiterm, date_sort=args.date_sort)
     res = all_paper_infomation(ids_pool)
-    cfprint("\n".join(iterms), end="\n\n")
+    print("\n".join(iterms), end="\n\n")
     outtype = 1 if args.outType else None
     print_info(res, format_type=outtype)
 
