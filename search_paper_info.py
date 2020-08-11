@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import sys,os
+import sys,os,re
 import requests
 import argparse
 from termcolor import colored
@@ -81,7 +81,10 @@ def get_each_paper_content(pmid):
         journal = r2.find('meta', attrs={"name": "citation_publisher"})['content']
     except:
         journal = 'No journal'
-    IDresult['journal'] = journal
+    IF = get_IF(journal)
+
+    IDresult['journal'] = journal + "  " + str(IF)
+
     try:
         link_url = r2.find('link', attrs={"rel": "canonical"})['href']
     except:
@@ -96,7 +99,7 @@ def get_each_paper_content(pmid):
     IDresult['cn_abstract'] = cn_abstract
     return IDresult
 
-@retry(stop_max_attempt_number=5,stop_max_delay=20)
+@retry(stop_max_attempt_number=5,stop_max_delay=50)
 def get_pmids(terms, maxi, date_sort):
     base_url = 'https://pubmed.ncbi.nlm.nih.gov/'
     pmids = []
@@ -119,6 +122,22 @@ def get_pmids(terms, maxi, date_sort):
         except Exception as e:
             sys.stderr.write('Error occurs when searching {} \n{} | {}\n\n'.format(colored(term, 'cyan'), full_url, e))
     return pmids
+
+@retry(stop_max_attempt_number=5,stop_max_delay=50)
+def get_IF(Journal):
+    surl = 'https://www.greensci.net/search?kw='
+    jurl = surl + parse.quote(Journal.replace(' ', '+')).replace('%2B', '+')
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) '
+                             'AppleWebKit/537.36 (KHTML, like Gecko)'
+                             ' Chrome/84.0.4147.105 Safari/537.36'}
+    r = requests.Session().get(jurl, headers=headers)
+    r4 = BeautifulSoup(r.content, "html.parser", from_encoding="utf-8")
+    for t in r4.find_all('ul', class_=['mail-table']):
+        cont = t.text.lstrip().rstrip().split('\n\n')
+        temp = [re.sub(r'^\s', '', re.sub(r'\s+', ' ', tmp)) for tmp in cont if not re.search(r'\s+$', tmp)]
+        res = dict([(i.split(" ")[0], " ".join(i.split(" ")[1:]).lower()) for i in temp])
+        if Journal.lower() in res.values():
+            return res
 
 def cfprint(text, type = None):
     '''
@@ -180,10 +199,9 @@ def main():
         sys.exit('\nError: -m/--maxiterm must be choose from [10,20,50,100,200]\n')
     ids_pool = get_pmids(terms = iterms, maxi=args.maxiterm, date_sort=args.date_sort)
     res = all_paper_infomation(ids_pool)
-    print("\n".join(iterms), end="\n\n")
+    print("\n ||| ".join(iterms), end="\n\n")
     outtype = 1 if args.outType else None
     print_info(res, format_type=outtype)
 
 if __name__ == '__main__':
     main()
-
