@@ -1,4 +1,6 @@
-Catabolism and interactions of uncultured organisms shaped by eco-thermodynamics in methanogenic bioprocesses
-Can Dietary Fatty Acids Affect the COVID-19 Infection Outcome in Vulnerable Populations
-Termite mounds contain soil-derived methanotroph communities kinetically adapted to elevated methane concentrations
-cancer AND sequencing
+# search by key words in Title/Abstract field
+microbiome[Title/Abstract]
+# by key words in title and journal and publication date
+((microbiota[Title]) AND ("mBio"[Journal])) AND (("2020"[Date - Publication] : "3000"[Date - Publication]))
+# by article title
+The meconium microbiota shares more features with the amniotic fluid microbiota than the maternal fecal and vaginal microbiota
