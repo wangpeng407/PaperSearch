@@ -91,7 +91,9 @@ def get_each_paper_content(pmid):
         link_url = 'No link url'
     IDresult['link_url'] = link_url
     try:
-        enc_abstract = str(r2.find('div', attrs={"id": "enc-abstract"}).find('p').text).replace("\n", "").lstrip()
+        enc_pool = r2.find('div', attrs={"id": "enc-abstract"}).find_all('p')
+        enc_abstract = "\n".join([str(i.text).replace("\n", "").lstrip()for i in enc_pool])
+        #enc_abstract = str(r2.find('div', attrs={"id": "enc-abstract"}).find('p').text).replace("\n", "").lstrip()
     except:
         enc_abstract = 'No abstract'
     IDresult['enc_abstract'] = enc_abstract
