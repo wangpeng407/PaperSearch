@@ -2,14 +2,18 @@
 # -*- coding: utf-8 -*-
 
 import sys,os,re
+import logging
 import requests
 import argparse
+from math import *
 from termcolor import colored
 from urllib import parse
 from bs4 import BeautifulSoup
 from retrying import retry
 from googletrans import Translator
 
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s: %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(levelname)s: %(message)s')
 
 def parse_args():
     parser = argparse.ArgumentParser(description=
@@ -37,18 +41,19 @@ def read_list(infile):
         cont = [i.rstrip() for i in f if not i.startswith('#') and i.rstrip() != '']
     return cont
 
+@retry(stop_max_attempt_number=100,stop_max_delay=1000)
 def translate(cont):
     '''translate english into Chinese using google_translator'''
     translator = Translator(service_urls=['translate.google.cn'])
-    return translator.translate(cont, dest='zh-cn').text
-
+    trans_cont = translator.translate(cont, src='en', dest='zh-cn').text
+    return trans_cont
 def all_paper_infomation(idlists):
     results = {}
     for each_id in idlists:
         results[each_id] = get_each_paper_content(each_id)
     return results
 
-@retry(stop_max_attempt_number=5,stop_max_delay=50)
+@retry(stop_max_attempt_number=100,stop_max_delay=1000)
 def get_each_paper_content(pmid):
     IDresult = {}
     temp_url = 'https://pubmed.ncbi.nlm.nih.gov/' + str(pmid)
@@ -56,7 +61,7 @@ def get_each_paper_content(pmid):
         r = requests.Session().get(temp_url)
         r2 = BeautifulSoup(r.content, "html.parser", from_encoding="utf-8")
     except Exception as e:
-        sys.stderr.write('Error occurs when retrieving {} | {}\n\n'.format(temp_url, e))
+        logging.error('Retrieving {} | {}\n\n'.format(temp_url, e))
     # try:
     #     pmid = r2.find('meta', attrs={"name": "uid"})['content']
     # except:
@@ -75,10 +80,12 @@ def get_each_paper_content(pmid):
         title = r2.find('meta', attrs={"name": "citation_title"})['content']
     except:
         title = 'No title'
-    cn_title = translate(title)
-    IDresult['title'] = title + ' [' + cn_title + "]"
+    t_temp = title.replace('\'', '')
+    cn_title = translate(t_temp)
+    IDresult['en_title'] = title
+    IDresult['cn_title'] = cn_title
     try:
-        journal = r2.find('meta', attrs={"name": "citation_publisher"})['content']
+        journal = r2.find('meta', attrs={"name": "citation_journal_title"})['content']
     except:
         journal = 'No journal'
     IF = get_IF(journal)
@@ -92,16 +99,18 @@ def get_each_paper_content(pmid):
     IDresult['link_url'] = link_url
     try:
         enc_pool = r2.find('div', attrs={"id": "enc-abstract"}).find_all('p')
-        enc_abstract = "\n".join([str(i.text).replace("\n", "").lstrip()for i in enc_pool])
-        #enc_abstract = str(r2.find('div', attrs={"id": "enc-abstract"}).find('p').text).replace("\n", "").lstrip()
+        enc_abstract1 = "\n".join([str(i.text).replace("\n", "").lstrip()for i in enc_pool])
+        enc_abstract = ' '.join(enc_abstract1.split())
+        # enc_abstract = str(r2.find('div', attrs={"id": "enc-abstract"}).find('p').text).replace("\n", "").lstrip()
     except:
         enc_abstract = 'No abstract'
     IDresult['enc_abstract'] = enc_abstract
-    cn_abstract = translate(enc_abstract)
+    enc_abstract_temp = enc_abstract.replace('\'', '')
+    cn_abstract = translate(enc_abstract_temp)
     IDresult['cn_abstract'] = cn_abstract
     return IDresult
 
-@retry(stop_max_attempt_number=5,stop_max_delay=50)
+@retry(stop_max_attempt_number=100,stop_max_delay=1000)
 def get_pmids(terms, maxi, date_sort):
     base_url = 'https://pubmed.ncbi.nlm.nih.gov/'
     pmids = []
@@ -111,21 +120,33 @@ def get_pmids(terms, maxi, date_sort):
         full_url = base_url + '?term=' + interm + ds + '&size=' + str(maxi)
         try:
             r = requests.Session().get(full_url)
-            r2 = BeautifulSoup(r.content, "html.parser", from_encoding="utf-8")
-            temp_pmid = r2.find('meta', attrs={"name": "uid"})
-            temp2_pmid = r2.find_all('a', class_='docsum-title') # keywords for many papers
-            if temp_pmid is None and len(temp2_pmid) == 0:
-                sys.stderr.write('WARNING: no results for {}.\n'.format(colored(term, 'red')))
-            if temp_pmid is not None:
-                pmids.append(temp_pmid['content'])
-            else:
-                for i in temp2_pmid:
-                    pmids.append(i['data-article-id'])
+            tmp_r = BeautifulSoup(r.content, "html.parser", from_encoding="utf-8")
+            try:
+                tol_paper_num = int(re.sub(r',', '', tmp_r.find('span', class_=['value']).text))
+                tol_page_num = ceil(tol_paper_num/int(maxi))
+            except:
+                tol_page_num = 1
         except Exception as e:
-            sys.stderr.write('Error occurs when searching {} \n{} | {}\n\n'.format(colored(term, 'cyan'), full_url, e))
+            logging.error('e1 when searching {} \n{} | {}\n\n'.format(term, full_url, e))
+        try:
+            all_url = [full_url + '&page=' + str(i) for i in range(1, tol_page_num+1)]
+            for temp_url in all_url:
+                rr = requests.Session().get(temp_url)
+                r2 = BeautifulSoup(rr.content, "html.parser", from_encoding="utf-8")
+                temp_pmid = r2.find('meta', attrs={"name": "uid"})
+                temp2_pmid = r2.find_all('a', class_='docsum-title') # keywords for many papers
+                if temp_pmid is None and len(temp2_pmid) == 0:
+                    logging.warning('No results for {}.\n'.format(term))
+                if temp_pmid is not None:
+                    pmids.append(temp_pmid['content'])
+                else:
+                    for i in temp2_pmid:
+                        pmids.append(i['data-article-id'])
+        except Exception as e:
+            logging.error('e2 when searching {} \n{} | {}\n\n'.format(term, temp_url, e))
     return pmids
 
-@retry(stop_max_attempt_number=5,stop_max_delay=50)
+@retry(stop_max_attempt_number=100,stop_max_delay=1000)
 def get_IF(Journal):
     surl = 'https://www.greensci.net/search?kw='
     jurl = surl + parse.quote(Journal.replace(' ', '+')).replace('%2B', '+')
@@ -134,12 +155,17 @@ def get_IF(Journal):
                              ' Chrome/84.0.4147.105 Safari/537.36'}
     r = requests.Session().get(jurl, headers=headers)
     r4 = BeautifulSoup(r.content, "html.parser", from_encoding="utf-8")
+    res = {}
     for t in r4.find_all('ul', class_=['mail-table']):
         cont = t.text.lstrip().rstrip().split('\n\n')
+        del (cont[1])
+        cont[1] = re.sub(r'^\s+', '\nName\n ', cont[1]).rstrip()
         temp = [re.sub(r'^\s', '', re.sub(r'\s+', ' ', tmp)) for tmp in cont if not re.search(r'\s+$', tmp)]
         res = dict([(i.split(" ")[0], " ".join(i.split(" ")[1:]).lower()) for i in temp])
         if Journal.lower() in res.values():
             return res
+    if not res:
+        return ' ||| Not finding IF'
 
 def cfprint(text, type = None):
     '''
@@ -161,11 +187,12 @@ def print_info(infs, format_type=None):
     if not isinstance(infs, dict):
         sys.stderr.write('Data structure may be wrong.')
     html_cont = '<!DOCTYPE html> <html lang = \"en\">\n <body>\n'
-    sorted_dict = dict(sorted(infs.items(), key=lambda x:x[0], reverse=False))
+    sorted_dict = dict(sorted(infs.items(), key=lambda x:x[0], reverse=True))
     for pmid,temp_dict in sorted_dict.items():
         if format_type is None:
             cfprint('Pubmed ID: ' + str(pmid), type=1)
-            cfprint('title: ' + temp_dict['title'])
+            cfprint('EN_title: ' + temp_dict['en_title'])
+            cfprint('CN_title: ' + temp_dict['cn_title'])
             cfprint('doi: ' + temp_dict['doi'])
             cfprint('link_url: ' + temp_dict['link_url'])
             cfprint('journal: ' + temp_dict['journal'])
@@ -174,7 +201,9 @@ def print_info(infs, format_type=None):
             cfprint('cn_abstract: '+ temp_dict['cn_abstract'])
             cfprint('#'*100, type=2)
         else:
-            html_cont += '\n<h2>' + str(pmid) + ": " + str(temp_dict['title']) + '</h2>\n'
+            html_cont += '\n<h2>Pubmed_ID: ' + str(pmid) + '</h2>\n'
+            html_cont += '\n<h3>' + str(temp_dict['en_title']) + '</h3>\n'
+            html_cont += '\n<h3>' + str(temp_dict['cn_title']) + '</h3>\n'
             html_cont += '\n<p style=\"margin:20px\"> <font face="arial"> <b>DOI: ' + \
                          str(temp_dict['doi']) + '</b> </font> </P>\n'
             html_cont += '\n<p style=\"margin:20px\"> <font face="arial" <b>URL: ' + \
@@ -195,15 +224,18 @@ def print_info(infs, format_type=None):
 def main():
     args = parse_args()
     if not os.path.isfile(args.list):
-        sys.exit('\nError: input list not exists or is empty, please check.\n')
+        logging.error('Input list not exists or is empty, please check.\n')
+        exit()
     iterms = read_list(args.list)
     if args.maxiterm not in [10,20,50,100,200]:
-        sys.exit('\nError: -m/--maxiterm must be choose from [10,20,50,100,200]\n')
+        logging.error('\n-m/--maxiterm must be choose from [10,20,50,100,200]\n')
+        exit()
     ids_pool = get_pmids(terms = iterms, maxi=args.maxiterm, date_sort=args.date_sort)
     res = all_paper_infomation(ids_pool)
-    print("\n ||| ".join(iterms), end="\n\n")
+    #logging.info("\n".join(iterms))
     outtype = 1 if args.outType else None
     print_info(res, format_type=outtype)
+
 
 if __name__ == '__main__':
     main()
