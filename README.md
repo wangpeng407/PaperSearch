@@ -26,6 +26,10 @@ python search_paper_info.py -l plist -m 10 -t 1 -d 1 > out.html
 python search_paper_info.py -l plist -m 10 -t 0 -d 1 > out.list
 ```
 
+### Example outfile
+
+see [here](https://github.com/wangpeng407/berry_papers)
+
 ### out files
 
 [out.html](https://github.com/wangpeng407/PaperSearch/blob/master/out.html)
