@@ -5,19 +5,23 @@ import sys,os,re
 import logging
 import requests
 import argparse
+import json
 from math import *
 from termcolor import colored
-from urllib import parse
+import urllib
+from urllib import request, parse
 from bs4 import BeautifulSoup
 from retrying import retry
-from googletrans import Translator
+# from googletrans import Translator
+from google_trans_new import google_translator
+# from translate import Translator
 
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s: %(levelname)s: %(message)s')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(levelname)s: %(message)s')
 
 def parse_args():
     parser = argparse.ArgumentParser(description=
-                                    "Version 2.0: Rerieve published paper infomation from " 
+                                    "Version 2.0: Rerieve published paper information from "
                                     "pubmed (https://pubmed.ncbi.nlm.nih.gov/) "
                                     "according to article title or keywords.\n",
                                      formatter_class=argparse.RawTextHelpFormatter)
@@ -41,19 +45,49 @@ def read_list(infile):
         cont = [i.rstrip() for i in f if not i.startswith('#') and i.rstrip() != '']
     return cont
 
-@retry(stop_max_attempt_number=100,stop_max_delay=1000)
-def translate(cont):
-    '''translate english into Chinese using google_translator'''
-    translator = Translator(service_urls=['translate.google.cn'])
-    trans_cont = translator.translate(cont, src='en', dest='zh-cn').text
-    return trans_cont
+@retry(stop_max_attempt_number=50,stop_max_delay=5000)
+def translate2(cont):
+    translator = google_translator()
+    translate_text = translator.translate(cont, lang_src='en', lang_tgt='zh-cn')
+    return translate_text
+
+# def translate2(data):
+#     url = 'http://fanyi.youdao.com/translate?smartresult=dict&smartresult=rule'
+#     formData = {
+#         'i': data, 'from': 'AUTO', 'to': 'AUTO', 'smartresult': 'dict',
+#         'client': 'fanyideskweb', 'salt': '1538959984992', 'sign': 'e2fd5830da31a783b6c1f83b522a7d7c',
+#         'doctype': 'json', 'keyfrom': 'fanyi.web', 'action': 'FY_BY_CLICKBUTTION', 'typoResult': 'false',
+#     }
+#     from_data_parse = urllib.parse.urlencode(formData).encode('utf-8')
+#     response =request.urlopen(url,data=from_data_parse)
+#     response_str=response.read().decode('utf-8')
+#     response_dict=json.loads(response_str)
+#     full_text = [response_dict['translateResult'][0][i]['tgt'] for i in range(0, len(response_dict['translateResult'][0]))]
+#     return " ".join(full_text)
+
+# def translate(cont):
+#     '''translate english into Chinese using google_translator'''
+#     translator = Translator(service_urls=['translate.google.cn'])
+#     trans_cont = translator.translate(cont, src='en', dest='zh-cn').text
+#     return trans_cont
+
+# def translate2(cont):
+#     translator= Translator(to_lang="zh")
+#     return translator.translate(cont)
+
+
+
 def all_paper_infomation(idlists):
     results = {}
+    temp_url = 'https://pubmed.ncbi.nlm.nih.gov/'
     for each_id in idlists:
-        results[each_id] = get_each_paper_content(each_id)
+        try:
+            results[each_id] = get_each_paper_content(each_id)
+        except:
+            logging.error('No information about {}, try {}{}'.format(each_id, temp_url, each_id))
     return results
 
-@retry(stop_max_attempt_number=100,stop_max_delay=1000)
+@retry(stop_max_attempt_number=50,stop_max_delay=5000)
 def get_each_paper_content(pmid):
     IDresult = {}
     temp_url = 'https://pubmed.ncbi.nlm.nih.gov/' + str(pmid)
@@ -81,16 +115,18 @@ def get_each_paper_content(pmid):
     except:
         title = 'No title'
     t_temp = title.replace('\'', '')
-    cn_title = translate(t_temp)
     IDresult['en_title'] = title
-    IDresult['cn_title'] = cn_title
+    try:
+        cn_title = translate2(t_temp)
+        IDresult['cn_title'] = cn_title
+    except:
+        IDresult['cn_title'] = '暂时不能翻译'
     try:
         journal = r2.find('meta', attrs={"name": "citation_journal_title"})['content']
     except:
         journal = 'No journal'
-    IF = get_IF(journal)
-
-    IDresult['journal'] = journal + "  " + str(IF)
+        #IF = get_IF(journal)
+    IDresult['journal'] = journal
 
     try:
         link_url = r2.find('link', attrs={"rel": "canonical"})['href']
@@ -106,14 +142,18 @@ def get_each_paper_content(pmid):
         enc_abstract = 'No abstract'
     IDresult['enc_abstract'] = enc_abstract
     enc_abstract_temp = enc_abstract.replace('\'', '')
-    cn_abstract = translate(enc_abstract_temp)
-    IDresult['cn_abstract'] = cn_abstract
+    try:
+        cn_abstract = translate2(enc_abstract_temp)
+        IDresult['cn_abstract'] = cn_abstract
+    except:
+        IDresult['cn_abstract'] = "暂时不能翻译"
     return IDresult
 
-@retry(stop_max_attempt_number=100,stop_max_delay=1000)
+@retry(stop_max_attempt_number=50,stop_max_delay=5000)
 def get_pmids(terms, maxi, date_sort):
     base_url = 'https://pubmed.ncbi.nlm.nih.gov/'
     pmids = []
+    global tol_page_num
     for term in terms:
         interm = parse.quote(term.replace(' ', '+')).replace('%2B', '+')
         ds = '&sort=pubdate' if date_sort else ''
@@ -146,7 +186,7 @@ def get_pmids(terms, maxi, date_sort):
             logging.error('e2 when searching {} \n{} | {}\n\n'.format(term, temp_url, e))
     return pmids
 
-@retry(stop_max_attempt_number=100,stop_max_delay=1000)
+@retry(stop_max_attempt_number=50,stop_max_delay=5000)
 def get_IF(Journal):
     surl = 'https://www.greensci.net/search?kw='
     jurl = surl + parse.quote(Journal.replace(' ', '+')).replace('%2B', '+')
