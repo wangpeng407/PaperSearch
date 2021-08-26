@@ -46,24 +46,23 @@ def read_list(infile):
     return cont
 
 @retry(stop_max_attempt_number=50,stop_max_delay=5000)
-def translate2(cont):
-    translator = google_translator()
-    translate_text = translator.translate(cont, lang_src='en', lang_tgt='zh-cn')
-    return translate_text
-
-# def translate2(data):
-#     url = 'http://fanyi.youdao.com/translate?smartresult=dict&smartresult=rule'
-#     formData = {
-#         'i': data, 'from': 'AUTO', 'to': 'AUTO', 'smartresult': 'dict',
-#         'client': 'fanyideskweb', 'salt': '1538959984992', 'sign': 'e2fd5830da31a783b6c1f83b522a7d7c',
-#         'doctype': 'json', 'keyfrom': 'fanyi.web', 'action': 'FY_BY_CLICKBUTTION', 'typoResult': 'false',
-#     }
-#     from_data_parse = urllib.parse.urlencode(formData).encode('utf-8')
-#     response =request.urlopen(url,data=from_data_parse)
-#     response_str=response.read().decode('utf-8')
-#     response_dict=json.loads(response_str)
-#     full_text = [response_dict['translateResult'][0][i]['tgt'] for i in range(0, len(response_dict['translateResult'][0]))]
-#     return " ".join(full_text)
+#def translate2(cont):
+#    translator = google_translator()
+#    translate_text = translator.translate(cont, lang_src='en', lang_tgt='zh-cn')
+#    return translate_text
+def translate2(data):
+	url = 'http://fanyi.youdao.com/translate?smartresult=dict&smartresult=rule'
+	formData = {
+         'i': data, 'from': 'AUTO', 'to': 'AUTO', 'smartresult': 'dict',
+         'client': 'fanyideskweb', 'salt': '1538959984992', 'sign': 'e2fd5830da31a783b6c1f83b522a7d7c',
+         'doctype': 'json', 'keyfrom': 'fanyi.web', 'action': 'FY_BY_CLICKBUTTION', 'typoResult': 'false',
+     }
+	from_data_parse = urllib.parse.urlencode(formData).encode('utf-8')
+	response =request.urlopen(url,data=from_data_parse)
+	response_str=response.read().decode('utf-8')
+	response_dict=json.loads(response_str)
+	full_text = [response_dict['translateResult'][0][i]['tgt'] for i in range(0, len(response_dict['translateResult'][0]))]
+	return " ".join(full_text)
 
 # def translate(cont):
 #     '''translate english into Chinese using google_translator'''
